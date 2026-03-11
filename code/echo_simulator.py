@@ -19,7 +19,7 @@ def parse_arguments():
     parser.add_argument(
         "-f",
         "-fault_type",
-        choices=["baseline", "open"],
+        choices=["baseline", "open", "short"],
         dest="fault_type",
         help="Type of fault to simulate",
     )
@@ -70,20 +70,32 @@ def open_fault_echo(n_samples: int, seed: int) -> pd.DataFrame:
     return pd.DataFrame(samples)
 
 
+def short_fault_echo(n_samples: int, seed: int) -> pd.DataFrame:
+    np.random.seed(seed)
+    packet_peak = TERMINUS * np.random.uniform(0.1, 0.7)
+
+    samples = -1 * baseline_echo(n_samples, seed, packet_peak)
+    return pd.DataFrame(samples)
+
+
 def generate_samples(n_samples: int, fault_type: str, seed: int) -> pd.DataFrame:
-    if fault_type == "baseline":
-        return baseline_echo(n_samples, seed)
-    elif fault_type == "open":
-        return open_fault_echo(n_samples, seed)
-    else:
-        raise ValueError(f"Invalid fault type: {fault_type}")
+
+    match fault_type:
+        case "baseline":
+            return baseline_echo(n_samples, seed)
+        case "open":
+            return open_fault_echo(n_samples, seed)
+        case "short":
+            return short_fault_echo(n_samples, seed)
+        case _:
+            raise ValueError(f"Invalid fault type: {fault_type}")
 
 
 def save_samples(samples: pd.DataFrame, output_file_path: str):
     samples.to_csv(output_file_path, header=False, index=False)
 
 
-def plot_samples(samples: pd.DataFrame):
+def plot_samples(samples: pd.DataFrame, fault_type: str):
 
     for _, row in samples.iterrows():
         plt.plot(row, alpha=0.5)
@@ -91,7 +103,7 @@ def plot_samples(samples: pd.DataFrame):
     plt.ylim(-1.1, 1.1)
     plt.ylabel("Voltage (V)")
     plt.xlabel("Time (s E-7)")
-    plt.title("Echo Signal")
+    plt.title(f"Echo Signal: {fault_type.capitalize()}")
     plt.show()
 
 
@@ -105,7 +117,7 @@ def main():
     samples = generate_samples(n_samples, fault_type, seed)
 
     if args.plot:
-        plot_samples(samples)
+        plot_samples(samples, fault_type)
 
     save_samples(samples, output_file)
 
