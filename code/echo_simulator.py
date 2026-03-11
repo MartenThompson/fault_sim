@@ -2,6 +2,9 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.stats import norm
+
+from constants import TERMINUS, PACKET_LENGTH
 
 
 def parse_arguments():
@@ -16,7 +19,7 @@ def parse_arguments():
     parser.add_argument(
         "-f",
         "-fault_type",
-        choices=["baseline"],
+        choices=["baseline", "open"],
         dest="fault_type",
         help="Type of fault to simulate",
     )
@@ -42,14 +45,36 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def baseline_echo(n_samples: int) -> pd.DataFrame:
-    samples = np.tile(np.repeat(0, 100), [n_samples, 1])
+def baseline_echo(
+    n_samples: int, seed: int = 101, packet_peak: float = TERMINUS * 0.8
+) -> pd.DataFrame:
+    np.random.seed(seed)
+
+    baseline = norm.pdf(
+        np.linspace(0, TERMINUS, PACKET_LENGTH), loc=packet_peak, scale=TERMINUS / 25
+    )
+    baseline = baseline / np.max(baseline)
+
+    noise_sd = 2e-2
+    samples = np.tile(baseline, [n_samples, 1]) + np.random.normal(
+        0, noise_sd, [n_samples, PACKET_LENGTH]
+    )
+    return pd.DataFrame(samples)
+
+
+def open_fault_echo(n_samples: int, seed: int) -> pd.DataFrame:
+    np.random.seed(seed)
+    packet_peak = TERMINUS * np.random.uniform(0.1, 0.7)
+
+    samples = baseline_echo(n_samples, seed, packet_peak)
     return pd.DataFrame(samples)
 
 
 def generate_samples(n_samples: int, fault_type: str, seed: int) -> pd.DataFrame:
     if fault_type == "baseline":
-        return baseline_echo(n_samples)
+        return baseline_echo(n_samples, seed)
+    elif fault_type == "open":
+        return open_fault_echo(n_samples, seed)
     else:
         raise ValueError(f"Invalid fault type: {fault_type}")
 
@@ -61,7 +86,12 @@ def save_samples(samples: pd.DataFrame, output_file_path: str):
 def plot_samples(samples: pd.DataFrame):
 
     for _, row in samples.iterrows():
-        plt.plot(row)
+        plt.plot(row, alpha=0.5)
+
+    plt.ylim(-1.1, 1.1)
+    plt.ylabel("Voltage (V)")
+    plt.xlabel("Time (s E-7)")
+    plt.title("Echo Signal")
     plt.show()
 
 
