@@ -22,3 +22,4 @@ code/echo_simulator.py -n 2 -o data/open_fault.csv -f open
 
 - [ ] this readme needs some love.
 - [ ] `echo_simulator` seed should vary by default, supply optional arg.
+- [ ] random seed management.
