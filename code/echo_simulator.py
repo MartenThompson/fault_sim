@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.stats import norm
 
-from constants import TERMINUS, PACKET_LENGTH
+from code.constants import TERMINUS, PACKET_LENGTH
 
 
 def parse_arguments():
@@ -30,14 +30,15 @@ def parse_arguments():
         dest="output_file",
         help="Output file to save the samples",
     )
-    parser.add_argument(
-        "-s",
-        "-seed",
-        type=int,
-        default=101,
-        dest="seed",
-        help="Seed for the random number generator",
-    )
+    # TODO: make repeatable, but more sensibly than this approach.
+    # parser.add_argument(
+    #     "-s",
+    #     "-seed",
+    #     type=int,
+    #     default=101,
+    #     dest="seed",
+    #     help="Seed for the random number generator",
+    # )
     parser.add_argument(
         "-p", "-plot", action="store_true", dest="plot", help="Plot the samples"
     )
@@ -45,11 +46,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def baseline_echo(
-    n_samples: int, seed: int = 101, packet_peak: float = TERMINUS * 0.8
-) -> pd.DataFrame:
-    np.random.seed(seed)
-
+def baseline_echo(n_samples: int, packet_peak: float = TERMINUS * 0.8) -> pd.DataFrame:
     baseline = norm.pdf(
         np.linspace(0, TERMINUS, PACKET_LENGTH), loc=packet_peak, scale=TERMINUS / 25
     )
@@ -62,31 +59,29 @@ def baseline_echo(
     return pd.DataFrame(samples)
 
 
-def open_fault_echo(n_samples: int, seed: int) -> pd.DataFrame:
-    np.random.seed(seed)
+def open_fault_echo(n_samples: int) -> pd.DataFrame:
     packet_peak = TERMINUS * np.random.uniform(0.1, 0.7)
 
-    samples = baseline_echo(n_samples, seed, packet_peak)
+    samples = baseline_echo(n_samples, packet_peak)
     return pd.DataFrame(samples)
 
 
-def short_fault_echo(n_samples: int, seed: int) -> pd.DataFrame:
-    np.random.seed(seed)
+def short_fault_echo(n_samples: int) -> pd.DataFrame:
     packet_peak = TERMINUS * np.random.uniform(0.1, 0.7)
 
-    samples = -1 * baseline_echo(n_samples, seed, packet_peak)
+    samples = -1 * baseline_echo(n_samples, packet_peak)
     return pd.DataFrame(samples)
 
 
-def generate_samples(n_samples: int, fault_type: str, seed: int) -> pd.DataFrame:
+def generate_samples(n_samples: int, fault_type: str) -> pd.DataFrame:
 
     match fault_type:
         case "baseline":
-            return baseline_echo(n_samples, seed)
+            return baseline_echo(n_samples)
         case "open":
-            return open_fault_echo(n_samples, seed)
+            return open_fault_echo(n_samples)
         case "short":
-            return short_fault_echo(n_samples, seed)
+            return short_fault_echo(n_samples)
         case _:
             raise ValueError(f"Invalid fault type: {fault_type}")
 
@@ -112,9 +107,8 @@ def main():
     n_samples = args.n_samples
     output_file = args.output_file
     fault_type = args.fault_type
-    seed = args.seed
 
-    samples = generate_samples(n_samples, fault_type, seed)
+    samples = generate_samples(n_samples, fault_type)
 
     if args.plot:
         plot_samples(samples, fault_type)

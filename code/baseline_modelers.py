@@ -46,6 +46,7 @@ class MahalanobisBaselineModel(BaselineModel):
         significance_threshold: float,
         regularization: float = 1e-6,
     ):
+        self.is_fit = False
         self.packet_length = packet_length
         self.significance_threshold = significance_threshold
         self.regularization = regularization
@@ -71,26 +72,30 @@ class MahalanobisBaselineModel(BaselineModel):
 
         self.peak_idx = int(np.argmax(np.abs(self.mean)))
         self.peak_voltage = self.mean[self.peak_idx]
+        self.is_fit = True
 
-    def predict(self, samples: pd.DataFrame) -> IsFault:
+    def predict(self, sample: pd.Series) -> IsFault:
         """
-        Compute the Mahalanobis distance between new samples and the burn-in samples.
+        Compute the Mahalanobis distance between new sample (single) and the burn-in samples.
 
         D = sqrt((x - mu)^T * Sigma^-1 * (x - mu))
         """
-        assert samples.shape[1] == self.packet_length, (
-            f"Samples must have length {self.packet_length}. Instead got {samples.shape[1]}"
-        )
-        assert samples.shape[0] > 0, "Samples must have at least one sample"
+        assert self.is_fit, "Model must be fit before predicting"
 
-        samples = samples.values
-        self.sample_mean = np.mean(samples, axis=0)
+        assert len(sample) == self.packet_length, (
+            f"Sample must have length {self.packet_length}. Instead got {len(sample)}"
+        )
+
+        sample = sample.values
+        self.sample = sample
 
         mean = self.mean
         precision = self.precision
-        residual = np.sum(samples - mean, axis=1)
-        D_squared = residual @ precision * residual
-        D = np.sqrt(np.max(D_squared, 0.0))
+        # residual = np.sum(sample - mean, axis=1)
+        residual = sample - mean
+        D_squared = residual @ precision @ residual
+
+        D = np.sqrt(np.max([D_squared, 0.0]))
 
         self.residual = residual
         self.D = D
