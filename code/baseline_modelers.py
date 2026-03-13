@@ -2,8 +2,19 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 
+from code.constants import IsFault
+
 
 class BaselineModel(ABC):
+    """
+    Baseline models are used to fingerprint normally functioning signals and make the binary classification of new samples as either faulted or not faulted.
+
+    They are used in three phases:
+    1. Training: add burn-in samples of normally functioning signals.
+    2. Fitting: compute representative statistics/models.
+    3. Predicting: classify new samples as faulted or not.
+    """
+
     @abstractmethod
     def train(self, burn_in_samples: pd.DataFrame):
         pass
@@ -13,13 +24,30 @@ class BaselineModel(ABC):
         pass
 
     @abstractmethod
-    def predict(self, samples: pd.DataFrame):
+    def predict(self, samples: pd.DataFrame) -> IsFault:
         pass
 
 
 class MahalanobisBaselineModel(BaselineModel):
-    def __init__(self, packet_length: int, regularization: float = 1e-6):
+    """
+    The Mahalanobis distance generalizes the (squared) z-score to multivariate data. Its test statistic is defined as:
+
+    D^2 = (x - mu)^T * Sigma^-1 * (x - mu)
+    where x is the sample, mu is the mean, and Sigma is the covariance matrix.
+
+    For normally distributed data, the Mahalanobis distance follows a chi-squared distribution with degrees of freedom equal to the packet_length.
+
+    It is sensitive to outliers in the training data; future work will incorporate more robust covariance estimation techniques.
+    """
+
+    def __init__(
+        self,
+        packet_length: int,
+        significance_threshold: float,
+        regularization: float = 1e-6,
+    ):
         self.packet_length = packet_length
+        self.significance_threshold = significance_threshold
         self.regularization = regularization
 
     def train(self, burn_in_samples: pd.DataFrame) -> None:
@@ -44,7 +72,7 @@ class MahalanobisBaselineModel(BaselineModel):
         self.peak_idx = int(np.argmax(np.abs(self.mean)))
         self.peak_voltage = self.mean[self.peak_idx]
 
-    def predict(self, samples: pd.DataFrame) -> tuple[float, np.ndarray]:
+    def predict(self, samples: pd.DataFrame) -> IsFault:
         """
         Compute the Mahalanobis distance between new samples and the burn-in samples.
 
@@ -56,11 +84,18 @@ class MahalanobisBaselineModel(BaselineModel):
         assert samples.shape[0] > 0, "Samples must have at least one sample"
 
         samples = samples.values
+        self.sample_mean = np.mean(samples, axis=0)
+
         mean = self.mean
         precision = self.precision
-
         residual = np.sum(samples - mean, axis=1)
         D_squared = residual @ precision * residual
         D = np.sqrt(np.max(D_squared, 0.0))
 
-        return D, residual
+        self.residual = residual
+        self.D = D
+
+        if D > self.significance_threshold:
+            return IsFault.FAULT
+        else:
+            return IsFault.NOT_FAULT
