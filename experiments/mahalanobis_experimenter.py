@@ -2,11 +2,12 @@ import argparse
 from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
+import multiprocessing as mp
 import os
 import pandas as pd
 from code.constants import PACKET_LENGTH, IsFault
 from code.baseline_modelers import MahalanobisBaselineModel
-from code.echo_simulator import baseline_echo, open_fault_echo, save_samples
+from code.echo_simulator import baseline_echo, open_fault_echo
 
 
 def parse_arguments():
@@ -43,14 +44,50 @@ def create_experiment_dirs(experiment_dir: str) -> tuple[str, str, str]:
     return training_dir, test_dir, results_dir
 
 
+def roc_curve(results_path: str):
+    results_dir = os.path.dirname(results_path)
+    results_df = pd.read_csv(results_path)
+    plt.figure()
+    plt.plot(results_df["true_positive_rate"], results_df["false_positive_rate"])
+    plt.xlabel("True Positive Rate")
+    plt.ylabel("False Positive Rate")
+    plt.title("ROC Curve")
+    plt.savefig(os.path.join(results_dir, "roc_curve.png"))
+    plt.close()
+
+
+def precision_recall_curve(results_path: str):
+    results_dir = os.path.dirname(results_path)
+    results_df = pd.read_csv(results_path)
+
+    precision = results_df["true_positive_rate"] / (
+        results_df["true_positive_rate"] + results_df["false_positive_rate"]
+    )
+    recall = results_df["true_positive_rate"] / (
+        results_df["true_positive_rate"] + results_df["false_negative_rate"]
+    )
+    plt.figure()
+    plt.plot(recall, precision)
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision-Recall Curve")
+    plt.savefig(os.path.join(results_dir, "precision_recall_curve.png"))
+    plt.close()
+
+
 def test_error_rates_open_fault(
     experiment_dir: str,
     n_training_samples: int,
     n_test_samples: int,
     n_experiments: int,
-):
+    significance_threshold: float = 17.0,
+) -> pd.DataFrame:
     # For now, test samples will be split evenly between no fault and open fault.
     training_dir, test_dir, results_dir = create_experiment_dirs(experiment_dir)
+
+    print(
+        f"Training baseline model with significance threshold: {significance_threshold}"
+    )
 
     false_positive = 0
     true_negative = 0
@@ -59,15 +96,15 @@ def test_error_rates_open_fault(
 
     for i in range(n_experiments):
         baseline_samples = baseline_echo(n_samples=n_training_samples)
-        save_samples(baseline_samples, os.path.join(training_dir, f"baseline_{i}.csv"))
+        # save_samples(baseline_samples, os.path.join(training_dir, f"baseline_{i}.csv"))
         baseline_model = MahalanobisBaselineModel(
-            packet_length=PACKET_LENGTH, significance_threshold=17.0
+            packet_length=PACKET_LENGTH, significance_threshold=significance_threshold
         )
         baseline_model.train(baseline_samples)
         baseline_model.fit()
 
         no_fault_samples = baseline_echo(n_samples=n_test_samples // 2)
-        save_samples(no_fault_samples, os.path.join(test_dir, f"no_fault_{i}.csv"))
+        # save_samples(no_fault_samples, os.path.join(test_dir, f"no_fault_{i}.csv"))
 
         for _, sample in no_fault_samples.iterrows():
             prediction = baseline_model.predict(sample)
@@ -77,7 +114,7 @@ def test_error_rates_open_fault(
                 true_negative += 1
 
         open_fault_samples = open_fault_echo(n_samples=n_test_samples // 2)
-        save_samples(open_fault_samples, os.path.join(test_dir, f"open_fault_{i}.csv"))
+        # save_samples(open_fault_samples, os.path.join(test_dir, f"open_fault_{i}.csv"))
 
         for _, sample in open_fault_samples.iterrows():
             prediction = baseline_model.predict(sample)
@@ -95,11 +132,13 @@ def test_error_rates_open_fault(
         "n_training_samples": n_training_samples,
         "n_test_samples": n_test_samples,
         "n_experiments": n_experiments,
+        "significance_threshold": significance_threshold,
         "true_positive_rate": true_positive_rate,
         "false_negative_rate": false_negative_rate,
         "true_negative_rate": true_negative_rate,
         "false_positive_rate": false_positive_rate,
     }
+    results_df = pd.DataFrame(results, index=[0])
 
     fig, ax = plt.subplots()
     cm = np.array([[true_positive, false_positive], [false_negative, true_negative]])
@@ -129,10 +168,11 @@ def test_error_rates_open_fault(
     fig.tight_layout()
     plt.savefig(os.path.join(results_dir, "confusion_matrix.png"))
 
-    results_path = os.path.join(results_dir, "open_fault_results.csv")
-    print(f"Saving results to {results_path}")
+    # results_path = os.path.join(results_dir, "open_fault_results.csv")
+    # print(f"Saving results to {results_path}")
+    # results_df.to_csv(results_path, index=False)
 
-    pd.DataFrame(results, index=[0]).to_csv(results_path, index=False)
+    return results_df
 
 
 def test_error_rates_short_fault():
@@ -157,6 +197,8 @@ def main():
     experiment_type = args.experiment_type
     experiment_dir_root = args.experiment_dir
 
+    significance_range = np.arange(1.0, 20.0, 1)
+
     os.makedirs(experiment_dir_root, exist_ok=True)
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
     experiment_dir = os.path.join(experiment_dir_root, f"{experiment_type}_{now}")
@@ -164,7 +206,24 @@ def main():
 
     match experiment_type:
         case "open_fault":
-            test_error_rates_open_fault(experiment_dir, 1000, 10, 100)
+            results_dfs = np.empty(len(significance_range), dtype=pd.DataFrame)
+
+            with mp.Pool(processes=mp.cpu_count()) as pool:
+                results_dfs = pool.starmap(
+                    test_error_rates_open_fault,
+                    [
+                        (experiment_dir, 1000, 10, 1000, significance_threshold)
+                        for significance_threshold in significance_range
+                    ],
+                )
+
+            results_df = pd.concat(results_dfs)
+            results_path = os.path.join(
+                os.path.join(experiment_dir, "results"), "open_fault_results.csv"
+            )
+            results_df.to_csv(results_path, index=False)
+            roc_curve(results_path)
+            precision_recall_curve(results_path)
         case "short_fault":
             test_error_rates_short_fault(experiment_dir)
         case _:

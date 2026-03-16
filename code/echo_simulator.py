@@ -52,7 +52,7 @@ def baseline_echo(n_samples: int, packet_peak: float = TERMINUS * 0.8) -> pd.Dat
     )
     baseline = baseline / np.max(baseline)
 
-    noise_sd = 2e-2
+    noise_sd = 5e-2
     samples = np.tile(baseline, [n_samples, 1]) + np.random.normal(
         0, noise_sd, [n_samples, PACKET_LENGTH]
     )
@@ -60,7 +60,7 @@ def baseline_echo(n_samples: int, packet_peak: float = TERMINUS * 0.8) -> pd.Dat
 
 
 def open_fault_echo(n_samples: int) -> pd.DataFrame:
-    packet_peak = TERMINUS * np.random.uniform(0.1, 0.7)
+    packet_peak = TERMINUS * np.random.uniform(0.1, 1.0)
 
     samples = baseline_echo(n_samples, packet_peak)
     return pd.DataFrame(samples)
