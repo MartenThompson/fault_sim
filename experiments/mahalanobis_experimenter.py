@@ -2,7 +2,6 @@ import argparse
 from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-import multiprocessing as mp
 import os
 import pandas as pd
 from code.constants import PACKET_LENGTH, IsFault
@@ -44,6 +43,44 @@ def create_experiment_dirs(experiment_dir: str) -> tuple[str, str, str]:
     return training_dir, test_dir, results_dir
 
 
+def plot_confusion_matrix(results_path: str):
+    # TODO: test
+    results_dir = os.path.dirname(results_path)
+    results_df = pd.read_csv(results_path)
+    true_positive = results_df["true_positive_rate"].sum()
+    false_positive = results_df["false_positive_rate"].sum()
+    false_negative = results_df["false_negative_rate"].sum()
+    true_negative = results_df["true_negative_rate"].sum()
+    fig, ax = plt.subplots()
+    cm = np.array([[true_positive, false_positive], [false_negative, true_negative]])
+    im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+    ax.figure.colorbar(im, ax=ax)
+    ax.set(
+        xticks=[0, 1],
+        yticks=[0, 1],
+        xticklabels=["Fault", "No Fault"],
+        yticklabels=["Fault", "No Fault"],
+        title="Confusion Matrix",
+        ylabel="True label",
+        xlabel="Predicted label",
+    )
+    fmt = "d"
+    thresh = cm.max() / 2.0
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(
+                j,
+                i,
+                format(cm[i, j], fmt),
+                ha="center",
+                va="center",
+                color="white" if cm[i, j] > thresh else "black",
+            )
+    fig.tight_layout()
+    plt.savefig(os.path.join(results_dir, "confusion_matrix.png"))
+    plt.close()
+
+
 def roc_curve(results_path: str):
     results_dir = os.path.dirname(results_path)
     results_df = pd.read_csv(results_path)
@@ -79,32 +116,27 @@ def test_error_rates_open_fault(
     experiment_dir: str,
     n_training_samples: int,
     n_test_samples: int,
-    n_experiments: int,
-    significance_threshold: float = 17.0,
+    significance_thresholds: np.ndarray,
 ) -> pd.DataFrame:
     # For now, test samples will be split evenly between no fault and open fault.
     training_dir, test_dir, results_dir = create_experiment_dirs(experiment_dir)
 
-    print(
-        f"Training baseline model with significance threshold: {significance_threshold}"
-    )
+    baseline_samples = baseline_echo(n_samples=n_training_samples)
+    no_fault_samples = baseline_echo(n_samples=n_test_samples // 2)
+    open_fault_samples = open_fault_echo(n_samples=n_test_samples // 2)
+    results_all = np.empty(len(significance_thresholds), dtype=pd.DataFrame)
 
-    false_positive = 0
-    true_negative = 0
-    true_positive = 0
-    false_negative = 0
-
-    for i in range(n_experiments):
-        baseline_samples = baseline_echo(n_samples=n_training_samples)
-        # save_samples(baseline_samples, os.path.join(training_dir, f"baseline_{i}.csv"))
+    for i, significance_threshold in enumerate(significance_thresholds):
         baseline_model = MahalanobisBaselineModel(
             packet_length=PACKET_LENGTH, significance_threshold=significance_threshold
         )
         baseline_model.train(baseline_samples)
         baseline_model.fit()
 
-        no_fault_samples = baseline_echo(n_samples=n_test_samples // 2)
-        # save_samples(no_fault_samples, os.path.join(test_dir, f"no_fault_{i}.csv"))
+        false_positive = 0
+        true_negative = 0
+        true_positive = 0
+        false_negative = 0
 
         for _, sample in no_fault_samples.iterrows():
             prediction = baseline_model.predict(sample)
@@ -113,9 +145,6 @@ def test_error_rates_open_fault(
             else:
                 true_negative += 1
 
-        open_fault_samples = open_fault_echo(n_samples=n_test_samples // 2)
-        # save_samples(open_fault_samples, os.path.join(test_dir, f"open_fault_{i}.csv"))
-
         for _, sample in open_fault_samples.iterrows():
             prediction = baseline_model.predict(sample)
             if prediction == IsFault.FAULT:
@@ -123,55 +152,23 @@ def test_error_rates_open_fault(
             else:
                 false_negative += 1
 
-    true_positive_rate = true_positive / (n_experiments * n_test_samples // 2)
-    false_negative_rate = false_negative / (n_experiments * n_test_samples // 2)
-    true_negative_rate = true_negative / (n_experiments * n_test_samples // 2)
-    false_positive_rate = false_positive / (n_experiments * n_test_samples // 2)
+        true_positive_rate = true_positive / (n_test_samples // 2)
+        false_negative_rate = false_negative / (n_test_samples // 2)
+        true_negative_rate = true_negative / (n_test_samples // 2)
+        false_positive_rate = false_positive / (n_test_samples // 2)
 
-    results = {
-        "n_training_samples": n_training_samples,
-        "n_test_samples": n_test_samples,
-        "n_experiments": n_experiments,
-        "significance_threshold": significance_threshold,
-        "true_positive_rate": true_positive_rate,
-        "false_negative_rate": false_negative_rate,
-        "true_negative_rate": true_negative_rate,
-        "false_positive_rate": false_positive_rate,
-    }
-    results_df = pd.DataFrame(results, index=[0])
+        results = {
+            "n_training_samples": n_training_samples,
+            "n_test_samples": n_test_samples,
+            "significance_threshold": significance_threshold,
+            "true_positive_rate": true_positive_rate,
+            "false_negative_rate": false_negative_rate,
+            "true_negative_rate": true_negative_rate,
+            "false_positive_rate": false_positive_rate,
+        }
+        results_all[i] = pd.DataFrame(results, index=[0])
 
-    fig, ax = plt.subplots()
-    cm = np.array([[true_positive, false_positive], [false_negative, true_negative]])
-    im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
-    ax.figure.colorbar(im, ax=ax)
-    ax.set(
-        xticks=[0, 1],
-        yticks=[0, 1],
-        xticklabels=["Fault", "No Fault"],
-        yticklabels=["Fault", "No Fault"],
-        title="Confusion Matrix",
-        ylabel="True label",
-        xlabel="Predicted label",
-    )
-    fmt = "d"
-    thresh = cm.max() / 2.0
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax.text(
-                j,
-                i,
-                format(cm[i, j], fmt),
-                ha="center",
-                va="center",
-                color="white" if cm[i, j] > thresh else "black",
-            )
-    fig.tight_layout()
-    plt.savefig(os.path.join(results_dir, "confusion_matrix.png"))
-
-    # results_path = os.path.join(results_dir, "open_fault_results.csv")
-    # print(f"Saving results to {results_path}")
-    # results_df.to_csv(results_path, index=False)
-
+    results_df = pd.concat(results_all)
     return results_df
 
 
@@ -194,10 +191,10 @@ def test_error_rates_short_fault():
 def main():
     args = parse_arguments()
 
+    n_experiments = 1000
+    significance_thresholds = np.linspace(1.0, 20.0, 20)
     experiment_type = args.experiment_type
     experiment_dir_root = args.experiment_dir
-
-    significance_range = np.arange(1.0, 20.0, 0.2)
 
     os.makedirs(experiment_dir_root, exist_ok=True)
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -206,17 +203,13 @@ def main():
 
     match experiment_type:
         case "open_fault":
-            results_dfs = np.empty(len(significance_range), dtype=pd.DataFrame)
-
-            with mp.Pool(processes=mp.cpu_count()) as pool:
-                results_dfs = pool.starmap(
-                    test_error_rates_open_fault,
-                    [
-                        (experiment_dir, 1000, 10, 1000, significance_threshold)
-                        for significance_threshold in significance_range
-                    ],
+            results_dfs = np.empty(
+                n_experiments * len(significance_thresholds), dtype=pd.DataFrame
+            )
+            for i in range(n_experiments):
+                results_dfs[i] = test_error_rates_open_fault(
+                    experiment_dir, 1000, 100, significance_thresholds
                 )
-
             results_df = pd.concat(results_dfs)
             results_path = os.path.join(
                 os.path.join(experiment_dir, "results"), "open_fault_results.csv"
