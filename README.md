@@ -5,10 +5,10 @@ Experimental tools to simulate, detect, and classify conductive faults.
 
 Experiments are conducted within the imagined product scenario diagramed below.
 
-<img width="600" alt="image" src="https://github.com/user-attachments/assets/36a752c6-9f8f-4059-92cc-5e02884ee851" />
+<img width="600" alt="imagined deployment flowchart" src="https://github.com/user-attachments/assets/a92bb75d-5dbf-46b5-86a9-2bf9535ed868" />
 
 
-[diagram](https://excalidraw.com/#json=ZWxGtjUG8Fc94i9KaMenp,l9A0dQwiD8_GujTcj4NK9g)
+[diagram](https://excalidraw.com/#json=pEvizIRmO61uVgM_lR85l,ilofvimXC81gyA3azqMzJQ)
 
 
 `code/echo_simulator.py` used to generate different sampling scenarios. 
