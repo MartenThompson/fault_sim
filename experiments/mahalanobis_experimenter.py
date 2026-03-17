@@ -48,9 +48,9 @@ def roc_curve(results_path: str):
     results_dir = os.path.dirname(results_path)
     results_df = pd.read_csv(results_path)
     plt.figure()
-    plt.plot(results_df["true_positive_rate"], results_df["false_positive_rate"])
-    plt.xlabel("True Positive Rate")
-    plt.ylabel("False Positive Rate")
+    plt.plot(results_df["false_positive_rate"], results_df["true_positive_rate"])
+    plt.ylabel("True Positive Rate")
+    plt.xlabel("False Positive Rate")
     plt.title("ROC Curve")
     plt.savefig(os.path.join(results_dir, "roc_curve.png"))
     plt.close()
@@ -197,7 +197,7 @@ def main():
     experiment_type = args.experiment_type
     experiment_dir_root = args.experiment_dir
 
-    significance_range = np.arange(1.0, 20.0, 1)
+    significance_range = np.arange(1.0, 20.0, 0.2)
 
     os.makedirs(experiment_dir_root, exist_ok=True)
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
