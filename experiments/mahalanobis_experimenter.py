@@ -84,11 +84,31 @@ def plot_confusion_matrix(results_path: str):
 def roc_curve(results_path: str):
     results_dir = os.path.dirname(results_path)
     results_df = pd.read_csv(results_path)
+    # Aggregate over repeated experiments at each threshold.
+    grouped = results_df.groupby("significance_threshold")
+
+    summary = grouped.agg(
+        false_positive_mean=("false_positive_rate", "mean"),
+        true_positive_mean=("true_positive_rate", "mean"),
+        true_positive_q01=("true_positive_rate", lambda x: x.quantile(0.05)),
+        true_positive_q99=("true_positive_rate", lambda x: x.quantile(0.95)),
+    ).reset_index()
+
+    # Sort by mean FPR so the curve is well-ordered on the x-axis.
+    summary = summary.sort_values("false_positive_mean")
+
+    fpr = summary["false_positive_mean"].values
+    tpr_mean = summary["true_positive_mean"].values
+    tpr_q01 = summary["true_positive_q01"].values
+    tpr_q99 = summary["true_positive_q99"].values
+
     plt.figure()
-    plt.plot(results_df["false_positive_rate"], results_df["true_positive_rate"])
+    plt.plot(fpr, tpr_mean, label="Mean")
+    plt.fill_between(fpr, tpr_q01, tpr_q99, alpha=0.2, label="TPR 5-95%")
     plt.ylabel("True Positive Rate")
     plt.xlabel("False Positive Rate")
     plt.title("ROC Curve")
+    plt.legend()
     plt.savefig(os.path.join(results_dir, "roc_curve.png"))
     plt.close()
 
@@ -191,7 +211,7 @@ def test_error_rates_short_fault():
 def main():
     args = parse_arguments()
 
-    n_experiments = 1000
+    n_experiments = 100
     significance_thresholds = np.linspace(1.0, 20.0, 20)
     experiment_type = args.experiment_type
     experiment_dir_root = args.experiment_dir
