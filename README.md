@@ -46,7 +46,7 @@ The figures below show baseline signal, short faults, and open faults.
   <img src="artifacts/figs/echo_open_fault_samples_s1e-1.png" width="30%" />
 </p>
 
-Originally I had planned on studying short and open faults, but the former (as conceived in this simulation) was not challenging enough to be interesting and the fault classifier was perfect. Since Mahalanobis distance operates on correlations, an inverted signal is extremely disimilar to baseline.
+Originally I had planned on studying short and open faults, but the former (as conceived in this simulation) was not challenging enough to be interesting and the fault classifier performed with perfect accuracy. Since Mahalanobis distance operates on correlations, an inverted signal is extremely disimilar to baseline.
 
 The open fault was more interesting, representing only a shift in echo peak, not inversion. I constructed the problem to be challenging: the baseline peak was located at `0.8 * conductor_length` and the open fault occured at a location uniformly distributed within `(0.7 * conductor_length, 0.9 * conductor_length)`. 
 
@@ -60,4 +60,14 @@ Over 500 simulations, the baseline classifer exhibited the following error rates
 Someone implementing this algorithm could then choose the significance threshold to deploy based on the desired error rates. 
 
 ## Future Work
+
+This is a rich problem space that affords many extensions. Both the model architectures and model inputs as described above could be expanded for greater accuracy and richer product features. 
+
+The simplified deployment scenario and corresopnding model architectures described above are static insofar as the fault detection model and classifier are trained, then deployed, and remain unchanged. In reality, both models would benefit from online learning. 
+
+* The fault detection model currently trains during a short burn-in period. Real-world sites will exhibit seasonality, varied loads, and other changes to the no-fault data generating process that the detection model should also learn.
+* The fault classification model currently leverages a fixed set of business logic to classify hard faults. Future work could develop a continuous process by which known faults are classified, unknown faults labeled as such and collected. Once the system has encountered sufficiently many unknown faults, it clusters them and graduates any consistent group to a new classification. 
+
+Finally, the inputs to the fault detection and classification models were intentionally kept simple (the voltage echo itself). Their accuracy and expressivity may be improved by considering additional inputs like environmental data (temperature, rain) and grid data (other sensing infrastructure). 
+
 
