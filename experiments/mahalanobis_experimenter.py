@@ -84,14 +84,13 @@ def plot_confusion_matrix(results_path: str):
 def roc_curve(results_path: str):
     results_dir = os.path.dirname(results_path)
     results_df = pd.read_csv(results_path)
-    # Aggregate over repeated experiments at each threshold.
     grouped = results_df.groupby("significance_threshold")
 
     summary = grouped.agg(
         false_positive_mean=("false_positive_rate", "mean"),
         true_positive_mean=("true_positive_rate", "mean"),
-        true_positive_q01=("true_positive_rate", lambda x: x.quantile(0.05)),
-        true_positive_q99=("true_positive_rate", lambda x: x.quantile(0.95)),
+        true_positive_q05=("true_positive_rate", lambda x: x.quantile(0.1)),
+        true_positive_q95=("true_positive_rate", lambda x: x.quantile(0.9)),
     ).reset_index()
 
     # Sort by mean FPR so the curve is well-ordered on the x-axis.
@@ -99,16 +98,17 @@ def roc_curve(results_path: str):
 
     fpr = summary["false_positive_mean"].values
     tpr_mean = summary["true_positive_mean"].values
-    tpr_q01 = summary["true_positive_q01"].values
-    tpr_q99 = summary["true_positive_q99"].values
+    tpr_q05 = summary["true_positive_q05"].values
+    tpr_q95 = summary["true_positive_q95"].values
 
-    plt.figure()
-    plt.plot(fpr, tpr_mean, label="Mean")
-    plt.fill_between(fpr, tpr_q01, tpr_q99, alpha=0.2, label="TPR 5-95%")
-    plt.ylabel("True Positive Rate")
-    plt.xlabel("False Positive Rate")
-    plt.title("ROC Curve")
-    plt.legend()
+    fig, ax = plt.subplots()
+    ax.plot(fpr, tpr_mean, label="Mean")
+    ax.fill_between(fpr, tpr_q05, tpr_q95, alpha=0.2, label="TPR 10-90%")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_xlabel("False Positive Rate")
+    ax.set_title("ROC Curve")
+    ax.legend()
+    ax.set_box_aspect(1)
     plt.savefig(os.path.join(results_dir, "roc_curve.png"))
     plt.close()
 
@@ -123,11 +123,32 @@ def precision_recall_curve(results_path: str):
     recall = results_df["true_positive_rate"] / (
         results_df["true_positive_rate"] + results_df["false_negative_rate"]
     )
-    plt.figure()
-    plt.plot(recall, precision)
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title("Precision-Recall Curve")
+    results_df = results_df.assign(precision=precision, recall=recall)
+
+    grouped = results_df.groupby("significance_threshold")
+    summary = grouped.agg(
+        recall_mean=("recall", "mean"),
+        precision_mean=("precision", "mean"),
+        precision_q05=("precision", lambda x: x.quantile(0.05)),
+        precision_q95=("precision", lambda x: x.quantile(0.95)),
+    ).reset_index()
+
+    # Sort by mean recall so the curve is ordered along the x-axis.
+    summary = summary.sort_values("recall_mean")
+
+    recall_mean = summary["recall_mean"].values
+    precision_mean = summary["precision_mean"].values
+    precision_q05 = summary["precision_q05"].values
+    precision_q95 = summary["precision_q95"].values
+
+    fig, ax = plt.subplots()
+    ax.plot(recall_mean, precision_mean, label="Mean")
+    ax.fill_between(recall_mean, precision_q05, precision_q95, alpha=0.2, label="5-95%")
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_title("Precision-Recall Curve")
+    ax.legend()
+    ax.set_box_aspect(1)
     plt.savefig(os.path.join(results_dir, "precision_recall_curve.png"))
     plt.close()
 
@@ -211,7 +232,7 @@ def test_error_rates_short_fault():
 def main():
     args = parse_arguments()
 
-    n_experiments = 100
+    n_experiments = 500
     significance_thresholds = np.linspace(1.0, 20.0, 20)
     experiment_type = args.experiment_type
     experiment_dir_root = args.experiment_dir
