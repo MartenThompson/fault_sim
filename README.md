@@ -13,8 +13,7 @@ Experiments are conducted within the imagined product scenario diagramed below.
 
 `code/echo_simulator.py` used to generate different sampling scenarios. 
 ```
-code/echo_simulator.py -n 30 -o data/baseline.csv -f baseline 
-code/echo_simulator.py -n 2 -o data/open_fault.csv -f open
+python3.12 -m code.echo_simulator -n 3 -o data/short.csv -f short -plot
 ```
 
 

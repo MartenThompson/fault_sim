@@ -67,7 +67,7 @@ def open_fault_echo(n_samples: int) -> pd.DataFrame:
 
 
 def short_fault_echo(n_samples: int) -> pd.DataFrame:
-    packet_peak = TERMINUS * np.random.uniform(0.1, 0.7)
+    packet_peak = TERMINUS * np.random.uniform(0.7, 0.9)
 
     samples = -1 * baseline_echo(n_samples, packet_peak)
     return pd.DataFrame(samples)
