@@ -60,7 +60,7 @@ def baseline_echo(n_samples: int, packet_peak: float = TERMINUS * 0.8) -> pd.Dat
 
 
 def open_fault_echo(n_samples: int) -> pd.DataFrame:
-    packet_peak = TERMINUS * np.random.uniform(0.7, 0.9)
+    packet_peak = TERMINUS * 0.75  # np.random.uniform(0.7, 0.9)
 
     samples = baseline_echo(n_samples, packet_peak)
     return pd.DataFrame(samples)
@@ -91,6 +91,11 @@ def save_samples(samples: pd.DataFrame, output_file_path: str):
 
 
 def plot_samples(samples: pd.DataFrame, fault_type: str):
+
+    if fault_type == "open":
+        plt.axvline(x=80, color="gray", linestyle="--", label="Baseline Peak")
+        plt.axvline(x=75, color="black", linestyle="-", label="Open Fault Peak")
+        plt.legend()
 
     for _, row in samples.iterrows():
         plt.plot(row, alpha=0.5)

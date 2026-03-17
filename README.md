@@ -32,7 +32,32 @@ The contents of `code/fault_modelers.py` classify faults using statistical infer
 
 ## Experimental Results
 
+Our fault detection model forms the bedrock of the modeling task; it measures the similarity/difference between its training data and a newly encountered echo. A first step is in tuning its sensitivity. The basic premise of this experiment was to 
 
+* Train a baseline fault detection model.
+* Sweep across a range of sensitivities, classifying fault and non-fault echos.
+* Produce artifacts which enable us to choose the sensitivity that controls error rates. 
+
+The figures below show baseline signal, short faults, and open faults.
+
+<p align="center">
+  <img src="artifacts/figs/echo_baseline_samples_s1e-1.png" width="30%" />
+  <img src="artifacts/figs/echo_short_fault_samples_s1e-1.png" width="30%" />
+  <img src="artifacts/figs/echo_open_fault_samples_s1e-1.png" width="30%" />
+</p>
+
+Originally I had planned on studying short and open faults, but the former (as conceived in this simulation) was not challenging enough to be interesting and the fault classifier was perfect. Since Mahalanobis distance operates on correlations, an inverted signal is extremely disimilar to baseline.
+
+The open fault was more interesting, representing only a shift in echo peak, not inversion. I constructed the problem to be challenging: the baseline peak was located at `0.8 * conductor_length` and the open fault occured at a location uniformly distributed within `(0.7 * conductor_length, 0.9 * conductor_length)`. 
+
+Over 500 simulations, the baseline classifer exhibited the following error rates.
+
+<p align="center">
+    <img src="artifacts/open_fault_20260316_213726/results/precision_recall_curve.png", width="40%"/>
+    <img src="artifacts/open_fault_20260316_213726/results/roc_curve.png", width="40%"/>
+</p>
+
+Someone implementing this algorithm could then choose the significance threshold to deploy based on the desired error rates. 
 
 ## Future Work
 
